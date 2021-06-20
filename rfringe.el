@@ -339,19 +339,15 @@ See `window-scroll-functions' for more info.
 
 
 ;; extend flymake to show fringe indicators
-(defadvice flymake-post-syntax-check (after
-                                      rfringe-indicate-flymake-status
-                                      activate compile)
+(defun flymake-post-syntax-check-rfringe ()
   (rfringe-remove-managed-indicators)
   (let ((err-count (flymake-get-err-count flymake-err-info "e"))
         (warn-count (flymake-get-err-count flymake-err-info "w")))
-
     (if (or (/= 0 err-count) (/= 0 warn-count))
        (mapc (lambda (item)
                (message "rfringe: marking error at line %d" (car item))
                (rfringe-create-relative-indicator (rfringe--char-pos-for-line (car item))))
              flymake-err-info))))
-
+(add-hook 'flymake-after-syntax-check-hook 'flymake-post-syntax-check-rfringe)
 
 (provide 'rfringe)
-
