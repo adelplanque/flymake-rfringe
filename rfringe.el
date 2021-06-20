@@ -93,6 +93,9 @@
 
 
 (require 'fringe)
+(require 'flymake)
+(eval-when-compile (require 'cl-lib))
+
 
 (defvar rfringe-region-indicator-ovly nil
   "the overlay used internally for the region; see `rfringe-show-region-indicator'.
@@ -128,8 +131,7 @@ for use internally by rfringe.el .
     (goto-char start-pos)
     (while (> lines 0)
       (forward-line 1)
-      (decf lines))
-    ;;(message "l(%d) sp(%d) =x(%d)" lines start-pos (point))
+      (cl-decf lines))
     (point)))
 
 
@@ -345,7 +347,6 @@ See `window-scroll-functions' for more info.
         (warn-count (flymake-get-err-count flymake-err-info "w")))
     (if (or (/= 0 err-count) (/= 0 warn-count))
        (mapc (lambda (item)
-               (message "rfringe: marking error at line %d" (car item))
                (rfringe-create-relative-indicator (rfringe--char-pos-for-line (car item))))
              flymake-err-info))))
 (add-hook 'flymake-after-syntax-check-hook 'flymake-post-syntax-check-rfringe)
