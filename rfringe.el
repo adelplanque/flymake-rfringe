@@ -336,7 +336,8 @@ See `window-scroll-functions' for more info.
 
 (defun rfringe--char-pos-for-line (line-no)
   (save-excursion
-    (goto-line line-no)
+    (goto-char (point-min))
+    (forward-line (1- line-no))
     (point)))
 
 
