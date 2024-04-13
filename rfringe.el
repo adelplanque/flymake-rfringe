@@ -90,7 +90,7 @@
 ;;    indicators this way.  This is not the only intended use of rfringe.el,
 ;;    but it is a good example.
 ;;
-
+;;; Code:
 
 (require 'fringe)
 (require 'flymake)
@@ -98,25 +98,23 @@
 
 
 (defvar rfringe-region-indicator-ovly nil
-  "the overlay used internally for the region; see `rfringe-show-region-indicator'.
+  "The overlay used internally for the region; see `rfringe-show-region-indicator'.
 
-Applications should not set this value directly. It is intended
-for use internally by rfringe.el .
-" )
+Applications should not set this value directly.  It is intended for use
+internally by rfringe.el.")
 
 (defvar rfringe-managed-indicators nil
-  "a list holding the position and actual overlay for all
-\"managed\" indicators. They are managed in the sense that they
-automatically update their positions when the window changes
-configuration or scrolls, and they can be deleted as a set via
-`rfringe-remove-managed-indicators'.
+  "A list holding the position and actual overlay for all \"managed\" indicators.
 
-Each element in this list is a cons cell, (POS . OVLY) where POS
-is the character position and OVLY is the actual overlay.
+They are managed in the sense that they automatically update their positions
+when the window changes configuration or scrolls, and they can be deleted as a
+set via `rfringe-remove-managed-indicators'.
 
-Applications should not set this value directly. It is intended
-for use internally by rfringe.el .
-")
+Each element in this list is a cons cell, (POS . OVLY) where POS is the
+character position and OVLY is the actual overlay.
+
+Applications should not set this value directly. It is intended for use
+internally by rfringe.el.")
 
 
 (make-variable-buffer-local 'rfringe-managed-indicators)
@@ -126,14 +124,13 @@ for use internally by rfringe.el .
 (define-fringe-bitmap 'rfringe-thin-dash [255 0])
 
 (defun rfringe--compute-position (lines start-pos)
-  "computes a position that is LINES ahead of START-POS"
+  "Computes a position that is LINES ahead of START-POS."
   (save-excursion
     (goto-char start-pos)
     (while (> lines 0)
       (forward-line 1)
       (cl-decf lines))
     (point)))
-
 
 (defun rfringe-hide-region ()
   "Hide any bitmap currently displayed in the fringe indicating the region."
@@ -143,29 +140,23 @@ for use internally by rfringe.el .
         (delete-overlay rfringe-region-indicator-ovly)
         (setq rfringe-region-indicator-ovly nil))))
 
-
-
 (defun rfringe-update-region-indicator (&optional buf)
-  "update any fringe indicator for the region, in the buffer BUF."
+  "Update any fringe indicator for the region, in the buffer BUF."
   (if (not buf)
       (setq buf (current-buffer)))
   (with-current-buffer buf
     (if rfringe-region-indicator-ovly
         (rfringe-show-region-indicator buf))))
 
-
-
 (defun rfringe-insert-bitmap (bitmap pos &optional side face)
   "Insert a fringe bitmap at POS.
 
-BITMAP is the name of a bitmap defined with `define-fringe-bitmap'.
-SIDE defaults to 'left-fringe and can also be
-'right-fringe.  FACE is used to determine the bitmap's color.
+BITMAP is the name of a bitmap defined with `define-fringe-bitmap'.  SIDE
+defaults to \\='left-fringe and can also be \\='right-fringe.  FACE is used to
+determine the bitmap's color.
 
-The function returns an overlay object.
-It should be removed when no longer needed via `delete-overlay'.
-"
-
+The function returns an overlay object.  It should be removed when no longer
+needed via `delete-overlay'."
   (let* ((display-string `(,(or side 'left-fringe) ,bitmap .
                            ,(when face (cons face nil))))
           (before-string (propertize "!" 'display display-string))
@@ -174,26 +165,20 @@ It should be removed when no longer needed via `delete-overlay'.
     (overlay-put ov 'fringe-helper t)
     ov))
 
-
-
-
 (defun rfringe-create-relative-indicator (pos &optional dont-manage)
-  "Display an indicator in the fringe in the current buffer, for
-the position POS relative to the buffer size, via a simple bitmap
-dash.
+  "Display an indicator in the fringe in the current buffer.
 
-If optional DONT-MANAGE is nil, or not present, the overlay is
-stored and remembered.  In this case, if the window changes size,
-or scrolls, the bitmap will be automatically moved. It can also
-be deleted with `rfringe-remove-managed-indicators'. Passing
-DONT-MANAGE as t does not do this.
+POS is the position in the buffer.  Indicator take place in fringe relative to
+the buffer size, via a simple bitmap dash.
 
-For example, for a buffer of length 10000, if you pas a POS of
-5000, then this funciton will display a dash in the fringe,
-halfway down, regardless of whether char position 5000 is
-visible in the window.
+If optional DONT-MANAGE is nil, or not present, the overlay is stored and
+remembered.  In this case, if the window changes size, or scrolls, the bitmap
+will be automatically moved.  It can also be deleted with
+`rfringe-remove-managed-indicators'.  Passing DONT-MANAGE as t does not do this.
 
-"
+For example, for a buffer of length 10000, if you pas a POS of 5000, then this
+funciton will display a dash in the fringe, halfway down, regardless of whether
+char position 5000 is visible in the window."
   (let* ((top-of-window (window-start))
          (line-delta (scroll-bar-scale (cons pos (point-max)) (window-body-height)))
          (pos-of-indicator
@@ -211,27 +196,21 @@ visible in the window.
         (push (cons pos ov) rfringe-managed-indicators))
     ov))
 
-
-
-
 (defun rfringe-show-region-indicator (buf)
-  "Display an indicator in the fringe of the position of the region
-in the buffer BUF, via a bitmap dash.
+  "Display an indicator in the fringe of the position of the region in the
+buffer BUF, via a bitmap dash.
 
 For example, if the region is at the top of the buffer, then a
 dash will appear at the top of the fringe, regardless of whether
 any part of the region is in fact visible in the window."
-
   (with-current-buffer buf
     (rfringe-hide-region)
     (if (mark) ;; the mark is set
         (setq rfringe-region-indicator-ovly
               (rfringe-create-relative-indicator (min (point) (mark)) t)))))
 
-
-
 (defun rfringe-remove-managed-indicators ()
-  "Removes all rfringe-managed indicators for the current buffer."
+  "Remove all rfringe-managed indicators for the current buffer."
   (if rfringe-managed-indicators
       (progn
         (mapc (lambda (pair)
@@ -239,56 +218,45 @@ any part of the region is in fact visible in the window."
               rfringe-managed-indicators)
         (setq rfringe-managed-indicators nil))))
 
-
-
 (defun rfringe-show-region ()
   "Display an indicator in the fringe, for the top of the region."
   (interactive)
   (rfringe-show-region-indicator (current-buffer)))
 
 
-
 ;; hooks
 
 (defun rfringe--update-region-on-window-scroll (wnd new-start)
-  "a sort-of-hook that gets called as each window is scrolled.
+  "A sort-of-hook that gets called as each window is scrolled.
 The window is given by WND and the new start position is given
 by NEW-START.
 
-See `window-scroll-functions' for more info.
-"
+See `window-scroll-functions' for more info."
   (if wnd
       (rfringe-update-region-indicator (window-buffer wnd))))
 
-
-
 (defun rfringe--reset-region-indicator-on-window-config-change ()
-  "a sort-of-hook that gets called as a window's
-\"configuration\" changes. Configuration includes size, width (I
-guess), and so on. If the user splits or unsplits the window,
-then the configuration changes, and this hook gets called.
+  "A sort-of-hook that gets called as a window's \"configuration\" change.
+
+Configuration includes size, width (I guess), and so on. If the user splits or
+unsplits the window, then the configuration changes, and this hook gets called.
 
 This one resets the region indicator, if it is visible.
 
-See `window-configuration-change-hook' for more info.
-"
+See `window-configuration-change-hook' for more info."
   (if rfringe-region-indicator-ovly
       (rfringe-show-region)))
 
-
-
-
 (defun rfringe--reset-visible-indicators ()
-  "a sort-of-hook that gets called as a window's
-\"configuration\" changes. Configuration includes size, width (I
-guess), and so on. Also, if the user splits or unsplits the
-window, then the configuration changes, and this hook gets
-called.
+  "A sort-of-hook that gets called as a window's \"configuration\" change.
+
+Configuration includes size, width (I guess), and so on. Also, if the user
+splits or unsplits the window, then the configuration changes, and this hook
+gets called.
 
 This fn moves all managed indicators.
 
-See`window-configuration-change-hook' for more info.
-"
+See`window-configuration-change-hook' for more info."
   (if rfringe-managed-indicators
       (progn
         ;;(message "rfringe resetting...")
@@ -310,17 +278,13 @@ See`window-configuration-change-hook' for more info.
 
 
 (defun rfringe--update-managed-indicators-on-window-scroll (wnd new-start)
-  "a sort-of-hook that gets called as each window is scrolled.
-The window is given by WND and the new start position is given
-by NEW-START.
+  "A sort-of-hook that gets called as each window is scrolled.
+The window is given by WND and the new start position is given by NEW-START.
 
-See `window-scroll-functions' for more info.
-"
+See `window-scroll-functions' for more info."
   (if wnd
       (with-current-buffer (window-buffer wnd)
         (rfringe--reset-visible-indicators))))
-
-
 
 ;; hooks for managing the 'special' region indicator
 (add-hook 'window-scroll-functions 'rfringe--update-region-on-window-scroll)
@@ -328,21 +292,12 @@ See `window-scroll-functions' for more info.
           'rfringe--reset-region-indicator-on-window-config-change)
 (add-hook 'activate-mark-hook 'rfringe-update-region-indicator)
 
-
 ;; hooks for managing all managed indicators
 (add-hook 'window-scroll-functions 'rfringe--update-managed-indicators-on-window-scroll)
 (add-hook 'window-configuration-change-hook 'rfringe--reset-visible-indicators)
 
-
-(defun rfringe--char-pos-for-line (line-no)
-  (save-excursion
-    (goto-char (point-min))
-    (forward-line (1- line-no))
-    (point)))
-
-
 (defun flymake-post-syntax-check-rfringe (buffer)
-  "Extend flymake to show fringe indicators."
+  "Update fringe indicators in buffer BUFFER."
   (with-current-buffer buffer
     (rfringe-remove-managed-indicators)
     (mapc (lambda (item)
