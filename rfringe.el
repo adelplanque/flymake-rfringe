@@ -341,15 +341,15 @@ See `window-scroll-functions' for more info.
     (point)))
 
 
-;; extend flymake to show fringe indicators
-(defun flymake-post-syntax-check-rfringe ()
-  (rfringe-remove-managed-indicators)
-  (let ((err-count (flymake-get-err-count flymake-err-info "e"))
-        (warn-count (flymake-get-err-count flymake-err-info "w")))
-    (if (or (/= 0 err-count) (/= 0 warn-count))
-       (mapc (lambda (item)
-               (rfringe-create-relative-indicator (rfringe--char-pos-for-line (car item))))
-             flymake-err-info))))
-(add-hook 'flymake-after-syntax-check-hook 'flymake-post-syntax-check-rfringe)
+(defun flymake-post-syntax-check-rfringe (buffer)
+  "Extend flymake to show fringe indicators."
+  (with-current-buffer buffer
+    (rfringe-remove-managed-indicators)
+    (mapc (lambda (item)
+            (rfringe-create-relative-indicator (flymake-diagnostic-beg item)))
+          (flymake-diagnostics))))
+
+(advice-add 'flymake--update-diagnostics-listings :after #'flymake-post-syntax-check-rfringe)
 
 (provide 'rfringe)
+;;; rfringe.el ends here
