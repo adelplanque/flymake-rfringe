@@ -150,14 +150,18 @@ internally by rfringe.el.")
 ;; rfringe displays only one kind of bitmap - a thin dash. Create it here.
 (define-fringe-bitmap 'rfringe-thin-dash [255 0])
 
-(defun rfringe--compute-position (lines start-pos)
-  "Computes a position that is LINES ahead of START-POS."
-  (save-excursion
-    (goto-char start-pos)
-    (while (> lines 0)
-      (forward-line 1)
-      (cl-decf lines))
-    (point)))
+(defun rfringe--compute-position (pos)
+  "Computes relative position where to put fringe for absolute position POS."
+  (let* ((line-start (line-number-at-pos (window-start)))
+         ; pos can be > (point) when flymake diagnostic is outdated
+         (line-no (line-number-at-pos (min pos (point-max))))
+         (height (window-body-height))
+         (line-count (line-number-at-pos (1- (point-max))))
+         (rline (min (+ line-start (/ (* (1- line-no) height) line-count))
+                     line-count)))
+    (save-excursion (goto-char 1)
+                    (forward-line (1- rline))
+                    (point))))
 
 (defun rfringe-hide-region ()
   "Hide any bitmap currently displayed in the fringe indicating the region."
@@ -174,33 +178,6 @@ internally by rfringe.el.")
   (with-current-buffer buf
     (if rfringe-region-indicator-ovly
         (rfringe-show-region-indicator buf))))
-
-(defun rfringe-insert-bitmap (bitmap pos &optional side type)
-  "Insert a fringe bitmap at POS.
-
-BITMAP is the name of a bitmap defined with `define-fringe-bitmap'.  SIDE
-defaults to \\='left-fringe and can also be \\='right-fringe.  FACE is used to
-determine the bitmap's color.
-
-The function returns an overlay object.  It should be removed when no longer
-needed via `delete-overlay'."
-  (when (not (member type '(:warning :error))) (setq type :note))
-  (let* ((before-string (propertize "!" 'display
-                                    `(,(or side 'left-fringe) ,bitmap
-                                      ,(alist-get type rfringe-type-face-alist))))
-         (ov (seq-find (lambda (o) (and (overlay-get o 'rfringe-manage)
-                                        (overlay-get o 'rfringe)))
-                       (overlays-in pos pos))))
-    (if ov (when (< (alist-get (overlay-get ov 'rfringe-type) rfringe-type-rank-alist)
-                    (alist-get type rfringe-type-rank-alist))
-             (overlay-put ov 'before-string before-string)
-             (overlay-put ov 'rfringe-type type))
-      (setq ov (make-overlay pos pos))
-      (overlay-put ov 'rfringe t)
-      (overlay-put ov 'rfringe-type type)
-      (overlay-put ov 'before-string before-string)
-      (overlay-put ov 'fringe-helper t))
-    ov))
 
 (defun rfringe-create-relative-indicator (pos &optional dont-manage type)
   "Display an indicator in the fringe in the current buffer.
@@ -219,19 +196,31 @@ will be automatically moved.  It can also be deleted with
 For example, for a buffer of length 10000, if you pas a POS of 5000, then this
 funciton will display a dash in the fringe, halfway down, regardless of whether
 char position 5000 is visible in the window."
-  (let* ((top-of-window (window-start))
-         (line-delta (scroll-bar-scale (cons pos (point-max)) (window-body-height)))
-         (pos-of-indicator (rfringe--compute-position line-delta top-of-window))
-         (ov (rfringe-insert-bitmap
-              'rfringe-thin-dash
-              pos-of-indicator
-              'right-fringe
-              (cond ((eq type :error) 'rfringe-error-face)
-                    ((eq type :warning) 'rfringe-warning-face)
-                    (t 'rfringe-note-face)))))
-    (if (not dont-manage)
-        ;; save the location, and the actual overlay object
-        (push (cons pos ov) rfringe-managed-indicators))
+  (when (not (member type '(:warning :error))) (setq type :note))
+  (let* ((; Relative position where to put overlay
+          rpos (rfringe--compute-position pos))
+         (; String overlay
+          before-string (propertize "!" 'display
+                                    `(right-fringe rfringe-thin-dash
+                                                   ,(alist-get type rfringe-type-face-alist))))
+         (; Previouly overlay at rpos
+          ov (seq-find (lambda (o) (and (overlay-get o 'rfringe-manage)
+                                        (overlay-get o 'rfringe)))
+                       (overlays-in rpos rpos))))
+    (if ov (when (< (alist-get (overlay-get ov 'rfringe-type) rfringe-type-rank-alist)
+                    (alist-get type rfringe-type-rank-alist))
+             (overlay-put ov 'before-string before-string)
+             (overlay-put ov 'rfringe-type type))
+      (setq ov (make-overlay rpos rpos))
+      (overlay-put ov 'rfringe t)
+      (overlay-put ov 'rfringe-type type)
+      (overlay-put ov 'rfringe-pos pos)
+      (overlay-put ov 'before-string before-string)
+      (overlay-put ov 'fringe-helper t))
+    (when (not dont-manage)
+      ;; save the location, and the actual overlay object
+      (push (cons pos ov) rfringe-managed-indicators)
+      (overlay-put ov 'rfringe-manage t))
     ov))
 
 (defun rfringe-show-region-indicator (buf)
@@ -295,25 +284,11 @@ gets called.
 This fn moves all managed indicators.
 
 See`window-configuration-change-hook' for more info."
-  (if rfringe-managed-indicators
-      (progn
-        ;;(message "rfringe resetting...")
-        (let* ((top-of-window (window-start))
-               (bdy-height (window-body-height))
-               (mx (point-max))
-               (move-one
-                (lambda (pair)
-                  (let* ((pos (car pair))
-                         (ov (cdr pair))
-                         (line-delta (scroll-bar-scale (cons pos mx) bdy-height))
-                         (ipos (rfringe--compute-position line-delta top-of-window)))
-                    ;; (message "move %s to %s"
-                    ;;          (prin1-to-string ov)
-                    ;;          (prin1-to-string ipos))
-                    (move-overlay ov ipos ipos)))))
-          (mapc move-one rfringe-managed-indicators)))))
-
-
+  (mapc (lambda (ov)
+          (when (and (overlay-get ov 'rfringe) (overlay-get ov 'rfringe-manage))
+            (let ((rpos (rfringe--compute-position (overlay-get ov 'rfringe-pos))))
+              (move-overlay ov rpos rpos))))
+        (overlays-in 1 (buffer-size))))
 
 (defun rfringe--update-managed-indicators-on-window-scroll (wnd new-start)
   "A sort-of-hook that gets called as each window is scrolled.
