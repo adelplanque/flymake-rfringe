@@ -132,6 +132,17 @@ character position and OVLY is the actual overlay.
 Applications should not set this value directly. It is intended for use
 internally by rfringe.el.")
 
+(defconst rfringe-type-rank-alist
+  '((:error . 2)
+    (:warning . 1)
+    (:note . 0))
+  "A alist which associate a rank to mark type.")
+
+(defconst rfringe-type-face-alist
+  '((:error . rfringe-error-face)
+    (:warning . rfringe-warning-face)
+    (:note . rfringe-note-face))
+  "A alist which associate a face to mark type.")
 
 (make-variable-buffer-local 'rfringe-managed-indicators)
 (make-variable-buffer-local 'rfringe-region-indicator-ovly)
@@ -164,7 +175,7 @@ internally by rfringe.el.")
     (if rfringe-region-indicator-ovly
         (rfringe-show-region-indicator buf))))
 
-(defun rfringe-insert-bitmap (bitmap pos &optional side face)
+(defun rfringe-insert-bitmap (bitmap pos &optional side type)
   "Insert a fringe bitmap at POS.
 
 BITMAP is the name of a bitmap defined with `define-fringe-bitmap'.  SIDE
@@ -173,12 +184,22 @@ determine the bitmap's color.
 
 The function returns an overlay object.  It should be removed when no longer
 needed via `delete-overlay'."
-  (let* ((display-string `(,(or side 'left-fringe) ,bitmap .
-                           ,(when face (cons face nil))))
-          (before-string (propertize "!" 'display display-string))
-          (ov (make-overlay pos pos)))
-    (overlay-put ov 'before-string before-string)
-    (overlay-put ov 'fringe-helper t)
+  (when (not (member type '(:warning :error))) (setq type :note))
+  (let* ((before-string (propertize "!" 'display
+                                    `(,(or side 'left-fringe) ,bitmap
+                                      ,(alist-get type rfringe-type-face-alist))))
+         (ov (seq-find (lambda (o) (and (overlay-get o 'rfringe-manage)
+                                        (overlay-get o 'rfringe)))
+                       (overlays-in pos pos))))
+    (if ov (when (< (alist-get (overlay-get ov 'rfringe-type) rfringe-type-rank-alist)
+                    (alist-get type rfringe-type-rank-alist))
+             (overlay-put ov 'before-string before-string)
+             (overlay-put ov 'rfringe-type type))
+      (setq ov (make-overlay pos pos))
+      (overlay-put ov 'rfringe t)
+      (overlay-put ov 'rfringe-type type)
+      (overlay-put ov 'before-string before-string)
+      (overlay-put ov 'fringe-helper t))
     ov))
 
 (defun rfringe-create-relative-indicator (pos &optional dont-manage type)
