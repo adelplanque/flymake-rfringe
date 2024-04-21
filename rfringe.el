@@ -296,15 +296,15 @@ See `window-scroll-functions' for more info."
 (add-hook 'window-scroll-functions 'rfringe--update-managed-indicators-on-window-scroll)
 (add-hook 'window-configuration-change-hook 'rfringe--reset-visible-indicators)
 
-(defun flymake-post-syntax-check-rfringe (buffer)
-  "Update fringe indicators in buffer BUFFER."
-  (with-current-buffer buffer
-    (rfringe-remove-managed-indicators)
-    (mapc (lambda (item)
-            (rfringe-create-relative-indicator (flymake-diagnostic-beg item)))
-          (flymake-diagnostics))))
+(defun flymake-post-syntax-check-rfringe (&rest r)
+  "Update fringe indicators in current buffer.
+This function is intended to advice `flymake--handle-report', with R arguments."
+  (rfringe-remove-managed-indicators)
+  (mapc (lambda (item)
+          (rfringe-create-relative-indicator (flymake-diagnostic-beg item)))
+        (flymake-diagnostics)))
 
-(advice-add 'flymake--update-diagnostics-listings :after #'flymake-post-syntax-check-rfringe)
+(advice-add 'flymake--handle-report :after #'flymake-post-syntax-check-rfringe)
 
 (provide 'rfringe)
 ;;; rfringe.el ends here
