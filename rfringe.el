@@ -92,10 +92,26 @@
 ;;
 ;;; Code:
 
-(require 'fringe)
+(require 'compile)
 (require 'flymake)
+(require 'fringe)
 (eval-when-compile (require 'cl-lib))
 
+(defgroup rfringe nil
+  "Relative position mark, in the fringe."
+  :group 'flymake)
+
+(defface rfringe-error-face
+  '((t :inherit compilation-error))
+  "Face for error mark.")
+
+(defface rfringe-warning-face
+  '((t :inherit compilation-warning))
+  "Face for warning mark.")
+
+(defface rfringe-note-face
+  '((t :inherit compilation-info))
+  "Face for comment mark.")
 
 (defvar rfringe-region-indicator-ovly nil
   "The overlay used internally for the region; see `rfringe-show-region-indicator'.
@@ -165,11 +181,14 @@ needed via `delete-overlay'."
     (overlay-put ov 'fringe-helper t)
     ov))
 
-(defun rfringe-create-relative-indicator (pos &optional dont-manage)
+(defun rfringe-create-relative-indicator (pos &optional dont-manage type)
   "Display an indicator in the fringe in the current buffer.
 
 POS is the position in the buffer.  Indicator take place in fringe relative to
 the buffer size, via a simple bitmap dash.
+
+Optional TYPE is the `flymake-category' reported, and is used to fit the fringe
+face.  By default, the fringe is displayed as `rfringe-note-face'.
 
 If optional DONT-MANAGE is nil, or not present, the overlay is stored and
 remembered.  In this case, if the window changes size, or scrolls, the bitmap
@@ -181,16 +200,14 @@ funciton will display a dash in the fringe, halfway down, regardless of whether
 char position 5000 is visible in the window."
   (let* ((top-of-window (window-start))
          (line-delta (scroll-bar-scale (cons pos (point-max)) (window-body-height)))
-         (pos-of-indicator
-          (rfringe--compute-position line-delta top-of-window))
-         ov)
-    ;;(message "tow(%d) ld(%d)" top-of-window line-delta)
-    ;;(message "compute x=>x1: %d => %d" pos pos-of-indicator)
-    (setq ov (rfringe-insert-bitmap
+         (pos-of-indicator (rfringe--compute-position line-delta top-of-window))
+         (ov (rfringe-insert-bitmap
               'rfringe-thin-dash
               pos-of-indicator
               'right-fringe
-              'font-lock-warning-face))
+              (cond ((eq type :error) 'rfringe-error-face)
+                    ((eq type :warning) 'rfringe-warning-face)
+                    (t 'rfringe-note-face)))))
     (if (not dont-manage)
         ;; save the location, and the actual overlay object
         (push (cons pos ov) rfringe-managed-indicators))
@@ -301,7 +318,8 @@ See `window-scroll-functions' for more info."
 This function is intended to advice `flymake--handle-report', with R arguments."
   (rfringe-remove-managed-indicators)
   (mapc (lambda (item)
-          (rfringe-create-relative-indicator (flymake-diagnostic-beg item)))
+          (rfringe-create-relative-indicator (flymake-diagnostic-beg item) nil
+                                             (flymake-diagnostic-type item)))
         (flymake-diagnostics)))
 
 (advice-add 'flymake--handle-report :after #'flymake-post-syntax-check-rfringe)
