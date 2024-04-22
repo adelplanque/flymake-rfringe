@@ -119,19 +119,6 @@
 Applications should not set this value directly.  It is intended for use
 internally by rfringe.el.")
 
-(defvar rfringe-managed-indicators nil
-  "A list holding the position and actual overlay for all \"managed\" indicators.
-
-They are managed in the sense that they automatically update their positions
-when the window changes configuration or scrolls, and they can be deleted as a
-set via `rfringe-remove-managed-indicators'.
-
-Each element in this list is a cons cell, (POS . OVLY) where POS is the
-character position and OVLY is the actual overlay.
-
-Applications should not set this value directly. It is intended for use
-internally by rfringe.el.")
-
 (defconst rfringe-type-rank-alist
   '((:error . 2)
     (:warning . 1)
@@ -144,7 +131,6 @@ internally by rfringe.el.")
     (:note . rfringe-note-face))
   "A alist which associate a face to mark type.")
 
-(make-variable-buffer-local 'rfringe-managed-indicators)
 (make-variable-buffer-local 'rfringe-region-indicator-ovly)
 
 ;; rfringe displays only one kind of bitmap - a thin dash. Create it here.
@@ -179,7 +165,7 @@ internally by rfringe.el.")
     (if rfringe-region-indicator-ovly
         (rfringe-show-region-indicator buf))))
 
-(defun rfringe-create-relative-indicator (pos &optional dont-manage type)
+(defun rfringe-create-relative-indicator (pos &optional manage type)
   "Display an indicator in the fringe in the current buffer.
 
 POS is the position in the buffer.  Indicator take place in fringe relative to
@@ -188,39 +174,25 @@ the buffer size, via a simple bitmap dash.
 Optional TYPE is the `flymake-category' reported, and is used to fit the fringe
 face.  By default, the fringe is displayed as `rfringe-note-face'.
 
-If optional DONT-MANAGE is nil, or not present, the overlay is stored and
-remembered.  In this case, if the window changes size, or scrolls, the bitmap
-will be automatically moved.  It can also be deleted with
-`rfringe-remove-managed-indicators'.  Passing DONT-MANAGE as t does not do this.
+If optional MANAGE is non nil, the bitmap will be automatically moved if the
+window changes size, or scrolls, and will be deleted with
+`rfringe-remove-managed-indicators'.
 
 For example, for a buffer of length 10000, if you pas a POS of 5000, then this
-funciton will display a dash in the fringe, halfway down, regardless of whether
+function will display a dash in the fringe, halfway down, regardless of whether
 char position 5000 is visible in the window."
   (when (not (member type '(:warning :error))) (setq type :note))
-  (let* ((; Relative position where to put overlay
-          rpos (rfringe--compute-position pos))
-         (; String overlay
-          before-string (propertize "!" 'display
+  (let* ((rpos (rfringe--compute-position pos))
+         (before-string (propertize "!" 'display
                                     `(right-fringe rfringe-thin-dash
                                                    ,(alist-get type rfringe-type-face-alist))))
-         (; Previouly overlay at rpos
-          ov (seq-find (lambda (o) (and (overlay-get o 'rfringe-manage)
-                                        (overlay-get o 'rfringe)))
-                       (overlays-in rpos rpos))))
-    (if ov (when (< (alist-get (overlay-get ov 'rfringe-type) rfringe-type-rank-alist)
-                    (alist-get type rfringe-type-rank-alist))
-             (overlay-put ov 'before-string before-string)
-             (overlay-put ov 'rfringe-type type))
-      (setq ov (make-overlay rpos rpos))
-      (overlay-put ov 'rfringe t)
-      (overlay-put ov 'rfringe-type type)
-      (overlay-put ov 'rfringe-pos pos)
-      (overlay-put ov 'before-string before-string)
-      (overlay-put ov 'fringe-helper t))
-    (when (not dont-manage)
-      ;; save the location, and the actual overlay object
-      (push (cons pos ov) rfringe-managed-indicators)
-      (overlay-put ov 'rfringe-manage t))
+         (ov (make-overlay rpos rpos)))
+    (overlay-put ov 'rfringe t)
+    (overlay-put ov 'rfringe-pos pos)
+    (overlay-put ov 'before-string before-string)
+    (overlay-put ov 'priority (alist-get type rfringe-type-rank-alist))
+    (overlay-put ov 'fringe-helper t)
+    (if manage (overlay-put ov 'rfringe-manage t))
     ov))
 
 (defun rfringe-show-region-indicator (buf)
@@ -234,16 +206,14 @@ any part of the region is in fact visible in the window."
     (rfringe-hide-region)
     (if (mark) ;; the mark is set
         (setq rfringe-region-indicator-ovly
-              (rfringe-create-relative-indicator (min (point) (mark)) t)))))
+              (rfringe-create-relative-indicator (min (point) (mark)) nil)))))
 
 (defun rfringe-remove-managed-indicators ()
   "Remove all rfringe-managed indicators for the current buffer."
-  (if rfringe-managed-indicators
-      (progn
-        (mapc (lambda (pair)
-                (delete-overlay (cdr pair)))
-              rfringe-managed-indicators)
-        (setq rfringe-managed-indicators nil))))
+  (mapc (lambda (ov)
+          (when (and (overlay-get ov 'rfringe) (overlay-get ov 'rfringe-manage))
+            (delete-overlay ov)))
+        (overlays-in 1 (point-max))))
 
 (defun rfringe-show-region ()
   "Display an indicator in the fringe, for the top of the region."
@@ -288,7 +258,7 @@ See`window-configuration-change-hook' for more info."
           (when (and (overlay-get ov 'rfringe) (overlay-get ov 'rfringe-manage))
             (let ((rpos (rfringe--compute-position (overlay-get ov 'rfringe-pos))))
               (move-overlay ov rpos rpos))))
-        (overlays-in 1 (buffer-size))))
+        (overlays-in 1 (point-max))))
 
 (defun rfringe--update-managed-indicators-on-window-scroll (wnd new-start)
   "A sort-of-hook that gets called as each window is scrolled.
@@ -314,7 +284,7 @@ See `window-scroll-functions' for more info."
 This function is intended to advice `flymake--handle-report', with R arguments."
   (rfringe-remove-managed-indicators)
   (mapc (lambda (item)
-          (rfringe-create-relative-indicator (flymake-diagnostic-beg item) nil
+          (rfringe-create-relative-indicator (flymake-diagnostic-beg item) t
                                              (flymake-diagnostic-type item)))
         (flymake-diagnostics)))
 
