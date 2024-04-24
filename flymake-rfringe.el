@@ -141,41 +141,34 @@
                     (forward-line (1- rline))
                     (point))))
 
-(defun flymake-rfringe-create-relative-indicator (pos &optional manage type)
+(defun flymake-rfringe-create-relative-indicator (pos type)
   "Display an indicator in the fringe in the current buffer.
 
 POS is the position in the buffer.  Indicator take place in fringe relative to
 the buffer size, via a simple bitmap dash.
 
-Optional TYPE is the `flymake-category' reported, and is used to fit the fringe
+TYPE is the `flymake-category' reported, and is used to fit the fringe
 face.  By default, the fringe is displayed as `flymake-rfringe-note-face'.
-
-If optional MANAGE is non nil, the bitmap will be automatically moved if the
-window changes size, or scrolls, and will be deleted with
-`flymake-rfringe-remove-managed-indicators'.
 
 For example, for a buffer of length 10000, if you pas a POS of 5000, then this
 function will display a dash in the fringe, halfway down, regardless of whether
 char position 5000 is visible in the window."
   (when (not (member type '(:warning :error))) (setq type :note))
   (let* ((rpos (flymake-rfringe--compute-position pos))
-         (before-string (propertize "!" 'display
-                                    `(right-fringe flymake-rfringe-thin-dash
-                                                   ,(alist-get type flymake-rfringe-type-face-alist))))
+         (before-string (propertize
+                         "!" 'display
+                         `(right-fringe flymake-rfringe-thin-dash
+                                        ,(alist-get type flymake-rfringe-type-face-alist))))
          (ov (make-overlay rpos rpos)))
     (overlay-put ov 'flymake-rfringe t)
     (overlay-put ov 'flymake-rfringe-pos pos)
     (overlay-put ov 'before-string before-string)
     (overlay-put ov 'priority (alist-get type flymake-rfringe-type-rank-alist))
-    (overlay-put ov 'fringe-helper t)
-    (if manage (overlay-put ov 'flymake-rfringe-manage t))
-    ov))
+    (overlay-put ov 'fringe-helper t)))
 
 (defun flymake-rfringe-remove-managed-indicators ()
   "Remove all rfringe-managed indicators for the current buffer."
-  (mapc (lambda (ov)
-          (when (and (overlay-get ov 'rfringe) (overlay-get ov 'rfringe-manage))
-            (delete-overlay ov)))
+  (mapc (lambda (ov) (if (overlay-get ov 'flymake-rfringe) (delete-overlay ov)))
         (overlays-in 1 (point-max))))
 
 (defun flymake-rfringe--reset-visible-indicators ()
@@ -190,8 +183,9 @@ This fn moves all managed indicators.
 See`window-configuration-change-hook' for more info."
   (message "Update flymake-rfringe")
   (mapc (lambda (ov)
-          (when (and (overlay-get ov 'flymake-rfringe) (overlay-get ov 'flymake-rfringe-manage))
-            (let ((rpos (flymake-rfringe--compute-position (overlay-get ov 'flymake-rfringe-pos))))
+          (when (overlay-get ov 'flymake-rfringe)
+            (let ((rpos (flymake-rfringe--compute-position
+                         (overlay-get ov 'flymake-rfringe-pos))))
               (move-overlay ov rpos rpos))))
         (overlays-in 1 (point-max))))
 
@@ -216,8 +210,8 @@ This function is intended to advice `flymake--handle-report', with R arguments."
   (flymake-rfringe-remove-managed-indicators)
   (message "Create flymake-rfringe")
   (mapc (lambda (item)
-          (flymake-rfringe-create-relative-indicator (flymake-diagnostic-beg item) t
-                                             (flymake-diagnostic-type item)))
+          (flymake-rfringe-create-relative-indicator (flymake-diagnostic-beg item)
+                                                     (flymake-diagnostic-type item)))
         (flymake-diagnostics)))
 
 (advice-add 'flymake--handle-report :after #'flymake-post-syntax-check-rfringe)
