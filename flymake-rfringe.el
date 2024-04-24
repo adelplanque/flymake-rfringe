@@ -1,4 +1,4 @@
-;;; rfringe.el --- display the relative location of the region, in the fringe.
+;;; flymake-rfringe.el --- display the relative location of the region, in the fringe.
 ;;
 ;; Author     : Dino Chiesa <dpchiesa@hotmail.com>
 ;; Created    : April 2011
@@ -10,14 +10,14 @@
 ;; Copyright (C) 2011 Dino Chiesa
 ;;
 ;; This file is NOT part of GNU Emacs and is licensed differently.
-;; rfringe.el is licensed under the Ms-PL.  See the full copy of that
+;; flymake-rfringe.el is licensed under the Ms-PL.  See the full copy of that
 ;; license for more details. http://www.opensource.org/licenses/ms-pl
 ;;
 
 ;;; Commentary:
 ;;
 ;; This is a module to allow the use of the fringe to indicate locations
-;; relative to the bounds of the buffer.  rfringe = "relative fringe".
+;; relative to the bounds of the buffer.  flymake-rfringe = "relative fringe".
 ;;
 ;; In emacs, displaying fringe indicators is done via text overlays. In
 ;; that way, bitmaps in the fringe are attached to the lines of text
@@ -65,11 +65,11 @@
 ;; 1. In the simplest case, you can use rfringe to provide a visual
 ;;    indicator of the top of the region in the buffer, like so:
 ;;
-;;       (rfringe-show-region)
+;;       (flymake-rfringe-show-region)
 ;;
 ;;    To turn off the indicator, do this:
 ;;
-;;       (rfringe-hide-region)
+;;       (flymake-rfringe-hide-region)
 ;;
 ;;
 ;; 2. You can also use rfringe to display a set of indicators,
@@ -78,16 +78,16 @@
 ;;    whatever you like.
 ;;
 ;;       (setq posns '(79 1000 2000 3000 4000 5000 6000 9000 10000))
-;;       (mapc 'rfringe-create-relative-indicator posns)
+;;       (mapc 'flymake-rfringe-create-relative-indicator posns)
 ;;
 ;;    As you scroll through the buffer, the indicators in the fringe remain fixed.
 ;;
 ;;    To remove the indicators, do this:
 ;;
-;;       (rfringe-remove-managed-indicators)
+;;       (flymake-rfringe-remove-managed-indicators)
 ;;
-;;    By default, rfringe defines advice to extend flymake to display
-;;    indicators this way.  This is not the only intended use of rfringe.el,
+;;    By default, flymake-rfringe defines advice to extend flymake to display
+;;    indicators this way.  This is not the only intended use of flymake-rfringe.el,
 ;;    but it is a good example.
 ;;
 ;;; Code:
@@ -97,46 +97,38 @@
 (require 'fringe)
 (eval-when-compile (require 'cl-lib))
 
-(defgroup rfringe nil
+(defgroup flymake-rfringe nil
   "Relative position mark, in the fringe."
   :group 'flymake)
 
-(defface rfringe-error-face
+(defface flymake-rfringe-error-face
   '((t :inherit compilation-error))
   "Face for error mark.")
 
-(defface rfringe-warning-face
+(defface flymake-rfringe-warning-face
   '((t :inherit compilation-warning))
   "Face for warning mark.")
 
-(defface rfringe-note-face
+(defface flymake-rfringe-note-face
   '((t :inherit compilation-info))
   "Face for comment mark.")
 
-(defvar rfringe-region-indicator-ovly nil
-  "The overlay used internally for the region; see `rfringe-show-region-indicator'.
-
-Applications should not set this value directly.  It is intended for use
-internally by rfringe.el.")
-
-(defconst rfringe-type-rank-alist
+(defconst flymake-rfringe-type-rank-alist
   '((:error . 2)
     (:warning . 1)
     (:note . 0))
   "A alist which associate a rank to mark type.")
 
-(defconst rfringe-type-face-alist
-  '((:error . rfringe-error-face)
-    (:warning . rfringe-warning-face)
-    (:note . rfringe-note-face))
+(defconst flymake-rfringe-type-face-alist
+  '((:error . flymake-rfringe-error-face)
+    (:warning . flymake-rfringe-warning-face)
+    (:note . flymake-rfringe-note-face))
   "A alist which associate a face to mark type.")
 
-(make-variable-buffer-local 'rfringe-region-indicator-ovly)
+;; flymake-rfringe displays only one kind of bitmap - a thin dash. Create it here.
+(define-fringe-bitmap 'flymake-rfringe-thin-dash [255 0])
 
-;; rfringe displays only one kind of bitmap - a thin dash. Create it here.
-(define-fringe-bitmap 'rfringe-thin-dash [255 0])
-
-(defun rfringe--compute-position (pos)
+(defun flymake-rfringe--compute-position (pos)
   "Computes relative position where to put fringe for absolute position POS."
   (let* ((line-start (line-number-at-pos (window-start)))
          ; pos can be > (point) when flymake diagnostic is outdated
@@ -149,102 +141,44 @@ internally by rfringe.el.")
                     (forward-line (1- rline))
                     (point))))
 
-(defun rfringe-hide-region ()
-  "Hide any bitmap currently displayed in the fringe indicating the region."
-  (interactive)
-  (if rfringe-region-indicator-ovly
-      (progn
-        (delete-overlay rfringe-region-indicator-ovly)
-        (setq rfringe-region-indicator-ovly nil))))
-
-(defun rfringe-update-region-indicator (&optional buf)
-  "Update any fringe indicator for the region, in the buffer BUF."
-  (if (not buf)
-      (setq buf (current-buffer)))
-  (with-current-buffer buf
-    (if rfringe-region-indicator-ovly
-        (rfringe-show-region-indicator buf))))
-
-(defun rfringe-create-relative-indicator (pos &optional manage type)
+(defun flymake-rfringe-create-relative-indicator (pos &optional manage type)
   "Display an indicator in the fringe in the current buffer.
 
 POS is the position in the buffer.  Indicator take place in fringe relative to
 the buffer size, via a simple bitmap dash.
 
 Optional TYPE is the `flymake-category' reported, and is used to fit the fringe
-face.  By default, the fringe is displayed as `rfringe-note-face'.
+face.  By default, the fringe is displayed as `flymake-rfringe-note-face'.
 
 If optional MANAGE is non nil, the bitmap will be automatically moved if the
 window changes size, or scrolls, and will be deleted with
-`rfringe-remove-managed-indicators'.
+`flymake-rfringe-remove-managed-indicators'.
 
 For example, for a buffer of length 10000, if you pas a POS of 5000, then this
 function will display a dash in the fringe, halfway down, regardless of whether
 char position 5000 is visible in the window."
   (when (not (member type '(:warning :error))) (setq type :note))
-  (let* ((rpos (rfringe--compute-position pos))
+  (let* ((rpos (flymake-rfringe--compute-position pos))
          (before-string (propertize "!" 'display
-                                    `(right-fringe rfringe-thin-dash
-                                                   ,(alist-get type rfringe-type-face-alist))))
+                                    `(right-fringe flymake-rfringe-thin-dash
+                                                   ,(alist-get type flymake-rfringe-type-face-alist))))
          (ov (make-overlay rpos rpos)))
-    (overlay-put ov 'rfringe t)
-    (overlay-put ov 'rfringe-pos pos)
+    (overlay-put ov 'flymake-rfringe t)
+    (overlay-put ov 'flymake-rfringe-pos pos)
     (overlay-put ov 'before-string before-string)
-    (overlay-put ov 'priority (alist-get type rfringe-type-rank-alist))
+    (overlay-put ov 'priority (alist-get type flymake-rfringe-type-rank-alist))
     (overlay-put ov 'fringe-helper t)
-    (if manage (overlay-put ov 'rfringe-manage t))
+    (if manage (overlay-put ov 'flymake-rfringe-manage t))
     ov))
 
-(defun rfringe-show-region-indicator (buf)
-  "Display an indicator in the fringe of the position of the region in the
-buffer BUF, via a bitmap dash.
-
-For example, if the region is at the top of the buffer, then a
-dash will appear at the top of the fringe, regardless of whether
-any part of the region is in fact visible in the window."
-  (with-current-buffer buf
-    (rfringe-hide-region)
-    (if (mark) ;; the mark is set
-        (setq rfringe-region-indicator-ovly
-              (rfringe-create-relative-indicator (min (point) (mark)) nil)))))
-
-(defun rfringe-remove-managed-indicators ()
+(defun flymake-rfringe-remove-managed-indicators ()
   "Remove all rfringe-managed indicators for the current buffer."
   (mapc (lambda (ov)
           (when (and (overlay-get ov 'rfringe) (overlay-get ov 'rfringe-manage))
             (delete-overlay ov)))
         (overlays-in 1 (point-max))))
 
-(defun rfringe-show-region ()
-  "Display an indicator in the fringe, for the top of the region."
-  (interactive)
-  (rfringe-show-region-indicator (current-buffer)))
-
-
-;; hooks
-
-(defun rfringe--update-region-on-window-scroll (wnd new-start)
-  "A sort-of-hook that gets called as each window is scrolled.
-The window is given by WND and the new start position is given
-by NEW-START.
-
-See `window-scroll-functions' for more info."
-  (if wnd
-      (rfringe-update-region-indicator (window-buffer wnd))))
-
-(defun rfringe--reset-region-indicator-on-window-config-change ()
-  "A sort-of-hook that gets called as a window's \"configuration\" change.
-
-Configuration includes size, width (I guess), and so on. If the user splits or
-unsplits the window, then the configuration changes, and this hook gets called.
-
-This one resets the region indicator, if it is visible.
-
-See `window-configuration-change-hook' for more info."
-  (if rfringe-region-indicator-ovly
-      (rfringe-show-region)))
-
-(defun rfringe--reset-visible-indicators ()
+(defun flymake-rfringe--reset-visible-indicators ()
   "A sort-of-hook that gets called as a window's \"configuration\" change.
 
 Configuration includes size, width (I guess), and so on. Also, if the user
@@ -254,41 +188,39 @@ gets called.
 This fn moves all managed indicators.
 
 See`window-configuration-change-hook' for more info."
+  (message "Update flymake-rfringe")
   (mapc (lambda (ov)
-          (when (and (overlay-get ov 'rfringe) (overlay-get ov 'rfringe-manage))
-            (let ((rpos (rfringe--compute-position (overlay-get ov 'rfringe-pos))))
+          (when (and (overlay-get ov 'flymake-rfringe) (overlay-get ov 'flymake-rfringe-manage))
+            (let ((rpos (flymake-rfringe--compute-position (overlay-get ov 'flymake-rfringe-pos))))
               (move-overlay ov rpos rpos))))
         (overlays-in 1 (point-max))))
 
-(defun rfringe--update-managed-indicators-on-window-scroll (wnd new-start)
+(defun flymake-rfringe--update-managed-indicators-on-window-scroll (wnd new-start)
   "A sort-of-hook that gets called as each window is scrolled.
 The window is given by WND and the new start position is given by NEW-START.
 
 See `window-scroll-functions' for more info."
+  (message "window scroll hook: wnd=%s, new-start=%s, line=%s"
+           wnd new-start (line-number-at-pos new-start))
   (if wnd
       (with-current-buffer (window-buffer wnd)
-        (rfringe--reset-visible-indicators))))
-
-;; hooks for managing the 'special' region indicator
-(add-hook 'window-scroll-functions 'rfringe--update-region-on-window-scroll)
-(add-hook 'window-configuration-change-hook
-          'rfringe--reset-region-indicator-on-window-config-change)
-(add-hook 'activate-mark-hook 'rfringe-update-region-indicator)
+        (flymake-rfringe--reset-visible-indicators))))
 
 ;; hooks for managing all managed indicators
-(add-hook 'window-scroll-functions 'rfringe--update-managed-indicators-on-window-scroll)
-(add-hook 'window-configuration-change-hook 'rfringe--reset-visible-indicators)
+(add-hook 'window-scroll-functions #'flymake-rfringe--update-managed-indicators-on-window-scroll)
+(add-hook 'window-configuration-change-hook #'flymake-rfringe--reset-visible-indicators)
 
 (defun flymake-post-syntax-check-rfringe (&rest r)
   "Update fringe indicators in current buffer.
 This function is intended to advice `flymake--handle-report', with R arguments."
-  (rfringe-remove-managed-indicators)
+  (flymake-rfringe-remove-managed-indicators)
+  (message "Create flymake-rfringe")
   (mapc (lambda (item)
-          (rfringe-create-relative-indicator (flymake-diagnostic-beg item) t
+          (flymake-rfringe-create-relative-indicator (flymake-diagnostic-beg item) t
                                              (flymake-diagnostic-type item)))
         (flymake-diagnostics)))
 
 (advice-add 'flymake--handle-report :after #'flymake-post-syntax-check-rfringe)
 
-(provide 'rfringe)
-;;; rfringe.el ends here
+(provide 'flymake-rfringe)
+;;; flymake-rfringe.el ends here
