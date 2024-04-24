@@ -95,7 +95,6 @@
 (require 'compile)
 (require 'flymake)
 (require 'fringe)
-(eval-when-compile (require 'cl-lib))
 
 (defgroup flymake-rfringe nil
   "Relative position mark, in the fringe."
@@ -141,24 +140,17 @@
                     (forward-line (1- rline))
                     (point))))
 
-(defun flymake-rfringe-create-relative-indicator (pos type)
-  "Display an indicator in the fringe in the current buffer.
-
-POS is the position in the buffer.  Indicator take place in fringe relative to
-the buffer size, via a simple bitmap dash.
-
-TYPE is the `flymake-category' reported, and is used to fit the fringe
-face.  By default, the fringe is displayed as `flymake-rfringe-note-face'.
-
-For example, for a buffer of length 10000, if you pas a POS of 5000, then this
-function will display a dash in the fringe, halfway down, regardless of whether
-char position 5000 is visible in the window."
-  (when (not (member type '(:warning :error))) (setq type :note))
-  (let* ((rpos (flymake-rfringe--compute-position pos))
-         (before-string (propertize
-                         "!" 'display
-                         `(right-fringe flymake-rfringe-thin-dash
-                                        ,(alist-get type flymake-rfringe-type-face-alist))))
+(defun flymake-rfringe--create-indicator (diag)
+  "Create a fringe overlay for a flymake diagnostic DIAG.
+The fringe is created in visible area in proportion to the flymake diagnostic
+line throughout the buffer."
+  (let* ((pos (flymake-diagnostic-beg diag))
+         (type (let ((type (flymake-diagnostic-type diag)))
+                 (if (member type '(:warning :error)) type :note)))
+         (rpos (flymake-rfringe--compute-position pos))
+         (face (alist-get type flymake-rfringe-type-face-alist))
+         (before-string (propertize "!" 'display
+                                    `(right-fringe flymake-rfringe-thin-dash ,face)))
          (ov (make-overlay rpos rpos)))
     (overlay-put ov 'flymake-rfringe t)
     (overlay-put ov 'flymake-rfringe-pos pos)
@@ -166,22 +158,15 @@ char position 5000 is visible in the window."
     (overlay-put ov 'priority (alist-get type flymake-rfringe-type-rank-alist))
     (overlay-put ov 'fringe-helper t)))
 
-(defun flymake-rfringe-remove-managed-indicators ()
-  "Remove all rfringe-managed indicators for the current buffer."
+(defun flymake-rfringe--remove-indicators ()
+  "Remove all flymake rfringe indicators for the current buffer."
   (mapc (lambda (ov) (if (overlay-get ov 'flymake-rfringe) (delete-overlay ov)))
         (overlays-in 1 (point-max))))
 
-(defun flymake-rfringe--reset-visible-indicators ()
-  "A sort-of-hook that gets called as a window's \"configuration\" change.
-
-Configuration includes size, width (I guess), and so on. Also, if the user
-splits or unsplits the window, then the configuration changes, and this hook
-gets called.
-
-This fn moves all managed indicators.
-
-See`window-configuration-change-hook' for more info."
-  (message "Update flymake-rfringe")
+(defun flymake-rfringe--reset-indicators ()
+  "Refresh position of all fringe overlays.
+Should be called when window change (scroll or resized) to keep overlay in
+visible area proportional to the position in buffer."
   (mapc (lambda (ov)
           (when (overlay-get ov 'flymake-rfringe)
             (let ((rpos (flymake-rfringe--compute-position
@@ -189,32 +174,24 @@ See`window-configuration-change-hook' for more info."
               (move-overlay ov rpos rpos))))
         (overlays-in 1 (point-max))))
 
-(defun flymake-rfringe--update-managed-indicators-on-window-scroll (wnd new-start)
+(defun flymake-rfringe--update-indicators-on-window-scroll (wnd new-start)
   "A sort-of-hook that gets called as each window is scrolled.
 The window is given by WND and the new start position is given by NEW-START.
-
 See `window-scroll-functions' for more info."
-  (message "window scroll hook: wnd=%s, new-start=%s, line=%s"
-           wnd new-start (line-number-at-pos new-start))
-  (if wnd
-      (with-current-buffer (window-buffer wnd)
-        (flymake-rfringe--reset-visible-indicators))))
+  (if wnd (with-current-buffer (window-buffer wnd) (flymake-rfringe--reset-indicators))))
 
-;; hooks for managing all managed indicators
-(add-hook 'window-scroll-functions #'flymake-rfringe--update-managed-indicators-on-window-scroll)
-(add-hook 'window-configuration-change-hook #'flymake-rfringe--reset-visible-indicators)
-
-(defun flymake-post-syntax-check-rfringe (&rest r)
+(defun flymake-rfringe--post-syntax-check (&rest r)
   "Update fringe indicators in current buffer.
-This function is intended to advice `flymake--handle-report', with R arguments."
-  (flymake-rfringe-remove-managed-indicators)
-  (message "Create flymake-rfringe")
-  (mapc (lambda (item)
-          (flymake-rfringe-create-relative-indicator (flymake-diagnostic-beg item)
-                                                     (flymake-diagnostic-type item)))
+This function is intended to advice the `flymake--handle-report' function, whose
+arguments are R."
+  (flymake-rfringe--remove-indicators)
+  (mapc (lambda (item) (flymake-rfringe--create-indicator item))
         (flymake-diagnostics)))
 
-(advice-add 'flymake--handle-report :after #'flymake-post-syntax-check-rfringe)
+;; hooks for managing all managed indicators
+(add-hook 'window-scroll-functions #'flymake-rfringe--update-indicators-on-window-scroll)
+(add-hook 'window-configuration-change-hook #'flymake-rfringe--reset-indicators)
+(advice-add 'flymake--handle-report :after #'flymake-rfringe--post-syntax-check)
 
 (provide 'flymake-rfringe)
 ;;; flymake-rfringe.el ends here
