@@ -1,6 +1,6 @@
 ;;; flymake-rfringe.el --- Report flymake diagnostics as relative right fringe.
 
-;; Copyright (C) 2011 Dino Chiesa
+;; Copyright (C) 2024 Alain Delplanque
 
 ;; Author: Dino Chiesa <dpchiesa@hotmail.com>
 ;;         Alain Delplanque <alaindelplanque@mailoo.org>
