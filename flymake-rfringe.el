@@ -1,4 +1,4 @@
-;;; flymake-rfringe.el --- Report flymake diagnostics as relative right fringe.
+;;; flymake-rfringe.el --- Flymake diagnostics as relative fringe -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2024 Alain Delplanque
 
@@ -6,7 +6,8 @@
 ;;         Alain Delplanque <alaindelplanque@mailoo.org>
 ;; Maintainer: Alain Delplanque <alaindelplanque@mailoo.org>
 ;; Version: 1.0
-;; Keywords: flymake, fringe
+;; Package-Requires: ((emacs "27.1"))
+;; Keywords: tools
 ;; URL: https://github.com/adelplanque/flymake-rfringe
 
 ;; This file is NOT part of GNU Emacs.
