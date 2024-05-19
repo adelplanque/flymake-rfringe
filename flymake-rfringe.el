@@ -32,10 +32,10 @@
 
 ;;; Commentary:
 
-;; flymake-rfringe is a small module allowing the display of flymake diagnostics
-;; in the form of a small mark in the right fringe.  The marking take place in
-;; the visible window in proportion to the diagnostic line within the entire
-;; buffer.
+;; flymake-rfringe.el provide a minor mode `flymake-rfringe-mode' which display
+;; flymake diagnostics in the form of a small mark in the right fringe.  The
+;; marking is carried out place in the visible window in proportion to the
+;; diagnostic line in the entire buffer.
 
 ;; The style of the marks can be customized with the faces:
 ;; * `flymake-rfringe-error-face'
@@ -47,13 +47,18 @@
 
 ;; Usage:
 
-;; (require 'flymake-rfringe)
+;; Turn the mode on/off by M-x `flymake-rfringe-mode'.
+;; To enable this mode each time flymake is enabled:
+
+;;     (require 'flymake-rfringe)
+;;     (add-hook 'flymake-mode-hook #'flymake-rfringe-mode)
 
 ;; History:
 
-;; flymake-rfringe started as a fork of Dino Chiesa's rfringe.el to make the
-;; module compatible with the version of flymake shipped as standard in Emacs
-;; before evolving into a deeper rewrite.
+;; flymake-rfringe started as a fork of rfringe.el by Dino Chiesa
+;; (https://www.emacswiki.org/emacs/rfringe.el) to ensure module compatibility
+;; with versions of flymake shipped as standard in Emacs before evolving towards
+;; a deeper rewrite while only keeping the part related to flymake.
 
 ;;; Code:
 
@@ -94,6 +99,23 @@
 
 ;; flymake-rfringe displays only one kind of bitmap - a thin dash. Create it here.
 (define-fringe-bitmap 'flymake-rfringe-thin-dash [255 0])
+
+;;;###autoload
+(define-minor-mode flymake-rfringe-mode
+  "Enable `flymake-rfringe' in current buffer."
+  :group 'flymake-rfringe
+  (if flymake-rfringe-mode
+      (progn
+        (add-hook 'window-scroll-functions
+                  #'flymake-rfringe--update-indicators-on-window-scroll nil t)
+        (add-hook 'window-configuration-change-hook
+                  #'flymake-rfringe--reset-indicators nil t)
+        (flymake-rfringe--post-syntax-check))
+    (flymake-rfringe--remove-indicators)
+    (remove-hook 'window-scroll-functions
+                 #'flymake-rfringe--update-indicators-on-window-scroll t)
+    (remove-hook 'window-configuration-change-hook
+                 #'flymake-rfringe--reset-indicators t)))
 
 (defun flymake-rfringe--compute-position (pos)
   "Computes relative position where to put fringe for absolute position POS."
@@ -142,23 +164,22 @@ visible area proportional to the position in buffer."
               (move-overlay ov rpos rpos))))
         (overlays-in 1 (point-max))))
 
-(defun flymake-rfringe--update-indicators-on-window-scroll (wnd new-start)
+(defun flymake-rfringe--update-indicators-on-window-scroll (wnd _new-start)
   "A sort-of-hook that gets called as each window is scrolled.
 The window is given by WND and the new start position is given by NEW-START.
 See `window-scroll-functions' for more info."
   (if wnd (with-current-buffer (window-buffer wnd) (flymake-rfringe--reset-indicators))))
 
-(defun flymake-rfringe--post-syntax-check (&rest r)
+(defun flymake-rfringe--post-syntax-check (&rest _r)
   "Update fringe indicators in current buffer.
 This function is intended to advice the `flymake--handle-report' function, whose
 arguments are R."
-  (flymake-rfringe--remove-indicators)
-  (mapc (lambda (item) (flymake-rfringe--create-indicator item))
-        (flymake-diagnostics)))
+  (when flymake-rfringe-mode
+    (flymake-rfringe--remove-indicators)
+    (mapc (lambda (item) (flymake-rfringe--create-indicator item))
+          (flymake-diagnostics))))
 
-;; hooks for managing all indicators
-(add-hook 'window-scroll-functions #'flymake-rfringe--update-indicators-on-window-scroll)
-(add-hook 'window-configuration-change-hook #'flymake-rfringe--reset-indicators)
+;; Advice since flymake doesn't seem to provide a hook.
 (advice-add 'flymake--handle-report :after #'flymake-rfringe--post-syntax-check)
 
 (provide 'flymake-rfringe)
